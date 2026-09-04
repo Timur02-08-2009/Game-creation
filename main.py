@@ -1,4 +1,5 @@
 import pygame
+import random
 from sys import exit
 
 class Boi(pygame.sprite.Sprite):
@@ -60,6 +61,38 @@ class Boi(pygame.sprite.Sprite):
         self.apply_gravity()
         self.animate()
 
+class Target(pygame.sprite.Sprite):
+    def __init__(self, target_type):
+        super().__init__()
+        self.start = random.randint(800, 1000)
+        
+        # Load image based on target_type parameter
+        if target_type == "apple":
+            self.image = pygame.image.load("assets/apple.png").convert_alpha()
+        elif target_type == "broccoli":
+            self.image = pygame.image.load("assets/broccoli.png").convert_alpha()
+        else:
+            self.image = pygame.image.load("assets/carrot.png").convert_alpha()
+
+        self.rect = self.image.get_rect(center=(self.start, 200))
+
+    def update(self):
+        self.rect.x -= 6
+        self.destroy()
+
+    def destroy(self):
+        # Remove sprite from all groups once off-screen left
+        if self.rect.x <= -100:
+            self.kill()
+
+
+def check_collisions1():
+    global score
+    if boi.sprite:
+        target_group.empty()
+        return False
+    return True
+
 
 # Setup display and clock
 pygame.init()
@@ -77,6 +110,8 @@ boi = Boi()
 player_group = pygame.sprite.GroupSingle()
 player_group.add(boi)
 
+target_group = pygame.sprite.Group()
+
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -87,6 +122,13 @@ while True:
     screen.blit(sky, (0, 0))
     screen.blit(ground1, (0, 330))
     screen.blit(ground2, (400, 330))
+
+    target_group.draw(screen)
+    target_group.update()
+
+    if not target_group:
+        target_type = random.choice(['apple', 'broccoli', 'carrot'])
+        target_group.add(Target(target_type))
 
     # Update and draw player
     player_group.update()
