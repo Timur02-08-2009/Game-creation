@@ -8,12 +8,13 @@ SCREEN_HEIGHT = 400
 GROUND_HEIGHT = 50
 GROUND_Y = SCREEN_HEIGHT - GROUND_HEIGHT  # 350 px (ground floor level)
 SPRITE_SIZE = (64, 64)
+SPIDER_SIZE = (80, 67)  # Updated actual spider dimensions
 
 
 class Boi(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        # Load spider sprite sheet (5 frames)
+        # Load spider sprite sheet (5 frames from 521x83 sheet)
         raw_sheet = pygame.image.load("assets/spider.png").convert_alpha()
         
         sheet_width, sheet_height = raw_sheet.get_size()
@@ -23,13 +24,15 @@ class Boi(pygame.sprite.Sprite):
         for col in range(5):
             frame_rect = pygame.Rect(col * frame_width, 0, frame_width, sheet_height)
             frame_surf = raw_sheet.subsurface(frame_rect)
-            self.frames.append(pygame.transform.scale(frame_surf, SPRITE_SIZE))
+            self.frames.append(pygame.transform.scale(frame_surf, SPIDER_SIZE))
 
         self.frame_index = 0
         self.animation_speed = 0.15
 
         self.image = self.frames[int(self.frame_index)]
         self.rect = self.image.get_rect(midbottom=(100, GROUND_Y))
+        # Smaller, tighter hitbox so the player doesn't trigger collisions too early
+        self.hitbox = self.rect.inflate(-24, -12)
         self.gravity = 0
 
         self.invulnerable = False
@@ -44,7 +47,7 @@ class Boi(pygame.sprite.Sprite):
     def player_input(self):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_SPACE] and self.rect.bottom >= GROUND_Y:
-            self.gravity = -16
+            self.gravity = -18  # Increased jump height (-16 -> -18)
             if self.jump_sound:
                 self.jump_sound.play()
 
@@ -53,6 +56,7 @@ class Boi(pygame.sprite.Sprite):
         self.rect.y += self.gravity
         if self.rect.bottom >= GROUND_Y:
             self.rect.bottom = GROUND_Y
+        self.hitbox.center = self.rect.center
 
     def animate(self):
         self.frame_index += self.animation_speed
@@ -140,30 +144,36 @@ class Obstacle(pygame.sprite.Sprite):
 
         self.image = pygame.transform.scale(raw_img, SPRITE_SIZE)
         self.rect = self.image.get_rect(midbottom=(self.start_x, GROUND_Y))
+        # Tighter obstacle hitbox to match visible pixels
+        self.hitbox = self.rect.inflate(-16, -10)
 
     def update(self):
         self.rect.x -= 6
+        self.hitbox.center = self.rect.center
         if self.rect.right < 0:
             self.kill()
 
 
 def check_collisions():
     global score
-    if player_group.sprite:
-        collided = pygame.sprite.spritecollide(player_group.sprite, target_group, True)
-        if collided:
-            score += len(collided)
+    player = player_group.sprite
+    if player:
+        for target in target_group:
+            if player.hitbox.colliderect(target.rect):
+                target.kill()
+                score += 1
 
 
 def check_obstacle_collisions():
     global health
     player = player_group.sprite
     if player and not player.invulnerable:
-        hit_obstacles = pygame.sprite.spritecollide(player, obstacle_group, False)
-        if hit_obstacles:
-            health -= 1
-            player.invulnerable = True
-            player.hurt_timer = pygame.time.get_ticks()
+        for obstacle in obstacle_group:
+            if player.hitbox.colliderect(obstacle.hitbox):
+                health -= 1
+                player.invulnerable = True
+                player.hurt_timer = pygame.time.get_ticks()
+                break
 
 
 def display_hud():
@@ -174,7 +184,7 @@ def display_hud():
     screen.blit(health_surf, (SCREEN_WIDTH - 140, 20))
 
 
-# Setup display and clock (optional if u don't want your game to work)
+# Setup display and clock
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Spider Cave Run")
@@ -206,7 +216,7 @@ exit_rect = exit_btn.get_rect(center=(500, 300))
 HUD_FONT = pygame.font.Font(None, 36)
 INTRO_FONT = pygame.font.Font(None, 40)
 
-# State Variables for no reason
+# State Variables
 game_screen = 0
 score = 0
 health = 5
@@ -254,6 +264,7 @@ while True:
                     target_group.empty()
                     obstacle_group.empty()
                     boi.rect.midbottom = (100, GROUND_Y)
+                    boi.hitbox.center = boi.rect.center
                     game_screen = 1
                 elif exit_rect.collidepoint(event.pos):
                     pygame.quit()
@@ -271,12 +282,11 @@ while True:
         # Background render
         screen.blit(background, (0, 0))
 
-        # Horizontal shifting ground (optional)
+        # Horizontal shifting ground
         ground_x = (ground_x - 6) % ground.get_width()
         for x in range(-100, SCREEN_WIDTH + 100, ground.get_width()):
             screen.blit(ground, (x + ground_x, GROUND_Y))
 
-        # Unknown objects that I decided to add
         target_group.draw(screen)
         target_group.update()
 
